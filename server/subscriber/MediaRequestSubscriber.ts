@@ -2,8 +2,8 @@ import type { LidarrAlbumOptions } from '@server/api/servarr/lidarr';
 import LidarrAPI from '@server/api/servarr/lidarr';
 import type { RadarrMovieOptions } from '@server/api/servarr/radarr';
 import RadarrAPI from '@server/api/servarr/radarr';
-import type { ReadarrBookOptions } from '@server/api/servarr/readarr';
-import ReadarrAPI from '@server/api/servarr/readarr';
+import LazyLibrarianAPI from '@server/api/lazylibrarian';
+import GoogleBooksAPI from '@server/api/googlebooks';
 import type {
   AddSeriesOptions,
   SonarrSeries,
@@ -759,7 +759,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     }
   }
 
-  public async sendToReadarr(entity: MediaRequest): Promise<void> {
+  public async sendToLazyLibrarian(entity: MediaRequest): Promise<void> {
     if (
       entity.status === MediaRequestStatus.APPROVED &&
       entity.type === MediaType.BOOK
@@ -767,9 +767,10 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       try {
         const mediaRepository = getRepository(Media);
         const settings = getSettings();
-        if (settings.readarr.length === 0) {
+
+        if (settings.lazyLibrarian.length === 0) {
           logger.info(
-            'No Readarr server configured, skipping request processing',
+            'No LazyLibrarian server configured, skipping book request processing',
             {
               label: 'Media Request',
               requestId: entity.id,
@@ -779,27 +780,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
           return;
         }
 
-        let readarrSettings = settings.readarr.find(
-          (r) => r.isDefault && !r.is4k
-        );
-
-        if (
-          entity.serverId !== null &&
-          entity.serverId >= 0 &&
-          readarrSettings?.id !== entity.serverId
-        ) {
-          readarrSettings = settings.readarr.find(
-            (r) => r.id === entity.serverId
-          );
-        }
-
-        if (!readarrSettings) {
-          logger.warn('No default Readarr server configured.', {
-            label: 'Media Request',
-            requestId: entity.id,
-          });
-          return;
-        }
+        const llSettings = settings.lazyLibrarian[0];
 
         const media = await mediaRepository.findOne({
           where: { id: entity.media.id },
@@ -815,96 +796,94 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         }
 
         if (media.status === MediaStatus.AVAILABLE) {
-          logger.warn('Media already exists, marking request as APPROVED', {
+          logger.warn('Media already exists, skipping', {
             label: 'Media Request',
             requestId: entity.id,
           });
           return;
         }
 
-        const readarr = new ReadarrAPI({
-          apiKey: readarrSettings.apiKey,
-          url: ServarrBase.buildUrl(readarrSettings, '/api/v1'),
+        const ll = new LazyLibrarianAPI({
+          url: llSettings.hostname
+            ? `${llSettings.useSsl ? 'https' : 'http'}://${llSettings.hostname}:${llSettings.port}${llSettings.baseUrl ?? ''}`
+            : llSettings.baseUrl ?? '',
+          apiKey: llSettings.apiKey,
         });
 
-        let rootFolder = readarrSettings.activeDirectory;
-        let qualityProfile = readarrSettings.activeProfileId;
-        let tags = readarrSettings.tags ? [...readarrSettings.tags] : [];
-
-        if (entity.rootFolder && entity.rootFolder !== '') {
-          rootFolder = entity.rootFolder;
+        let bookTitle = '';
+        if (media.googleBooksId) {
+          try {
+            const googleBooks = new GoogleBooksAPI();
+            const volume = await googleBooks.getBook(media.googleBooksId);
+            const author = volume.volumeInfo.authors?.[0] ?? '';
+            bookTitle = author
+              ? `${volume.volumeInfo.title} ${author}`
+              : volume.volumeInfo.title;
+          } catch {
+            bookTitle = media.googleBooksId;
+          }
         }
-        if (entity.profileId) {
-          qualityProfile = entity.profileId;
-        }
-        if (entity.tags && !isEqual(entity.tags, readarrSettings.tags)) {
-          tags = entity.tags;
-        }
 
-        const readarrBookOptions: ReadarrBookOptions = {
-          title: media.googleBooksId ?? '',
-          qualityProfileId: qualityProfile,
-          metadataProfileId: 1,
-          rootFolderPath: rootFolder,
-          foreignBookId: media.googleBooksId ?? '',
-          monitored: true,
-          tags,
-          searchNow: !readarrSettings.preventSearch,
-        };
+        const searchResults = await ll.searchBook(bookTitle);
 
-        readarr
-          .addBook(readarrBookOptions)
-          .then(async (readarrBook) => {
-            const media = await mediaRepository.findOne({
-              where: { id: entity.media.id },
-            });
-            if (!media) throw new Error('Media data not found');
-
-            media.externalServiceId = readarrBook.id;
-            media.externalServiceSlug = readarrBook.titleSlug;
-            media.serviceId = readarrSettings?.id;
-            await mediaRepository.save(media);
-          })
-          .catch(async () => {
-            const requestRepository = getRepository(MediaRequest);
-            entity.status = MediaRequestStatus.FAILED;
-            requestRepository.save(entity);
-
-            logger.warn(
-              'Something went wrong sending book request to Readarr, marking status as FAILED',
-              {
-                label: 'Media Request',
-                requestId: entity.id,
-                mediaId: entity.media.id,
-              }
-            );
-
-            MediaRequest.sendNotification(
-              entity,
-              media,
-              Notification.MEDIA_FAILED
-            );
-          })
-          .finally(() => {
-            readarr.clearCache({
-              foreignBookId: media.googleBooksId,
-              externalId: media.externalServiceId,
-            });
+        if (searchResults.length === 0) {
+          logger.warn('No matching book found in LazyLibrarian', {
+            label: 'Media Request',
+            requestId: entity.id,
+            query: bookTitle,
           });
 
-        logger.info('Sent request to Readarr', {
+          const requestRepository = getRepository(MediaRequest);
+          entity.status = MediaRequestStatus.FAILED;
+          await requestRepository.save(entity);
+
+          MediaRequest.sendNotification(
+            entity,
+            media,
+            Notification.MEDIA_FAILED
+          );
+          return;
+        }
+
+        const match = searchResults[0];
+        await ll.addBook(match.BookID);
+
+        media.externalServiceSlug = match.BookID;
+        media.serviceId = 0;
+        await mediaRepository.save(media);
+
+        logger.info('Sent book request to LazyLibrarian', {
           label: 'Media Request',
           requestId: entity.id,
-          mediaId: entity.media.id,
+          bookId: match.BookID,
+          bookName: match.BookName,
         });
       } catch (e) {
-        logger.error('Something went wrong sending request to Readarr', {
+        logger.error('Something went wrong sending request to LazyLibrarian', {
           label: 'Media Request',
           errorMessage: e.message,
           requestId: entity.id,
           mediaId: entity.media.id,
         });
-        throw new Error(e.message);
+
+        try {
+          const requestRepository = getRepository(MediaRequest);
+          entity.status = MediaRequestStatus.FAILED;
+          await requestRepository.save(entity);
+
+          const media = await getRepository(Media).findOne({
+            where: { id: entity.media.id },
+          });
+          if (media) {
+            MediaRequest.sendNotification(
+              entity,
+              media,
+              Notification.MEDIA_FAILED
+            );
+          }
+        } catch {
+          // ignore notification errors
+        }
       }
     }
   }
@@ -1165,7 +1144,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
 
     this.sendToRadarr(event.entity as MediaRequest);
     this.sendToSonarr(event.entity as MediaRequest);
-    this.sendToReadarr(event.entity as MediaRequest);
+    this.sendToLazyLibrarian(event.entity as MediaRequest);
     this.sendToLidarr(event.entity as MediaRequest);
 
     this.updateParentStatus(event.entity as MediaRequest);
@@ -1187,7 +1166,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
 
     this.sendToRadarr(event.entity as MediaRequest);
     this.sendToSonarr(event.entity as MediaRequest);
-    this.sendToReadarr(event.entity as MediaRequest);
+    this.sendToLazyLibrarian(event.entity as MediaRequest);
     this.sendToLidarr(event.entity as MediaRequest);
 
     this.updateParentStatus(event.entity as MediaRequest);
