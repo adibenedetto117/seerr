@@ -6,7 +6,6 @@ import Tag from '@app/components/Common/Tag';
 import RequestModal from '@app/components/RequestModal';
 import StatusBadge from '@app/components/StatusBadge';
 import { Permission, useUser } from '@app/hooks/useUser';
-import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import {
   ArrowDownTrayIcon,
@@ -46,13 +45,10 @@ const BookDetails = ({ book }: BookDetailsProps) => {
     { fallbackData: book }
   );
 
-  const onRequestComplete = useCallback(
-    (newStatus: MediaStatus) => {
-      revalidate();
-      setShowRequestModal(false);
-    },
-    [revalidate]
-  );
+  const onRequestComplete = useCallback(() => {
+    revalidate();
+    setShowRequestModal(false);
+  }, [revalidate]);
 
   if (!data && !error) {
     return <LoadingSpinner />;
