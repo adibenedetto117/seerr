@@ -108,6 +108,26 @@ export class MediaRequest {
           requestBody.is4k ? '4K ' : ''
         }series requests.`
       );
+    } else if (
+      requestBody.mediaType === MediaType.BOOK &&
+      !requestUser.hasPermission(
+        [Permission.REQUEST, Permission.REQUEST_BOOK],
+        { type: 'or' }
+      )
+    ) {
+      throw new RequestPermissionError(
+        'You do not have permission to make book requests.'
+      );
+    } else if (
+      requestBody.mediaType === MediaType.MUSIC &&
+      !requestUser.hasPermission(
+        [Permission.REQUEST, Permission.REQUEST_MUSIC],
+        { type: 'or' }
+      )
+    ) {
+      throw new RequestPermissionError(
+        'You do not have permission to make music requests.'
+      );
     }
 
     const quotas = await requestUser.getQuota();
@@ -116,6 +136,114 @@ export class MediaRequest {
       throw new QuotaRestrictedError('Movie Quota exceeded.');
     } else if (requestBody.mediaType === MediaType.TV && quotas.tv.restricted) {
       throw new QuotaRestrictedError('Series Quota exceeded.');
+    } else if (
+      requestBody.mediaType === MediaType.BOOK &&
+      quotas.book?.restricted
+    ) {
+      throw new QuotaRestrictedError('Book Quota exceeded.');
+    } else if (
+      requestBody.mediaType === MediaType.MUSIC &&
+      quotas.music?.restricted
+    ) {
+      throw new QuotaRestrictedError('Music Quota exceeded.');
+    }
+
+    if (
+      requestBody.mediaType === MediaType.BOOK ||
+      requestBody.mediaType === MediaType.MUSIC
+    ) {
+      const externalIdField =
+        requestBody.mediaType === MediaType.BOOK
+          ? 'googleBooksId'
+          : 'musicBrainzId';
+      const externalId = requestBody.externalId;
+
+      if (!externalId) {
+        throw new Error('External ID is required for book/music requests.');
+      }
+
+      let media = await mediaRepository.findOne({
+        where: {
+          [externalIdField]: externalId,
+          mediaType: requestBody.mediaType,
+        },
+        relations: ['requests'],
+      });
+
+      if (!media) {
+        media = new Media({
+          tmdbId: 0,
+          [externalIdField]: externalId,
+          status: MediaStatus.PENDING,
+          status4k: MediaStatus.UNKNOWN,
+          mediaType: requestBody.mediaType,
+        });
+      } else {
+        if (media.status === MediaStatus.BLACKLISTED) {
+          throw new BlacklistedMediaError('This media is blacklisted.');
+        }
+        if (media.status === MediaStatus.UNKNOWN) {
+          media.status = MediaStatus.PENDING;
+        }
+      }
+
+      const existing = await requestRepository
+        .createQueryBuilder('request')
+        .leftJoin('request.media', 'media')
+        .leftJoinAndSelect('request.requestedBy', 'user')
+        .where(`media.${externalIdField} = :externalId`, { externalId })
+        .andWhere('media.mediaType = :mediaType', {
+          mediaType: requestBody.mediaType,
+        })
+        .getMany();
+
+      if (
+        existing &&
+        existing.length > 0 &&
+        existing[0].status !== MediaRequestStatus.DECLINED &&
+        existing[0].status !== MediaRequestStatus.COMPLETED
+      ) {
+        throw new DuplicateMediaRequestError(
+          'Request for this media already exists.'
+        );
+      }
+
+      await mediaRepository.save(media);
+
+      const autoApprovePermissions =
+        requestBody.mediaType === MediaType.BOOK
+          ? [Permission.AUTO_APPROVE, Permission.AUTO_APPROVE_BOOK]
+          : [Permission.AUTO_APPROVE, Permission.AUTO_APPROVE_MUSIC];
+
+      const request = new MediaRequest({
+        type: requestBody.mediaType,
+        media,
+        requestedBy: requestUser,
+        status: user.hasPermission(
+          [...autoApprovePermissions, Permission.MANAGE_REQUESTS],
+          { type: 'or' }
+        )
+          ? MediaRequestStatus.APPROVED
+          : MediaRequestStatus.PENDING,
+        modifiedBy: user.hasPermission(
+          [...autoApprovePermissions, Permission.MANAGE_REQUESTS],
+          { type: 'or' }
+        )
+          ? user
+          : undefined,
+        is4k: false,
+        isAudiobook:
+          requestBody.mediaType === MediaType.BOOK &&
+          (requestBody.isAudiobook ?? false),
+        serverId: requestBody.serverId,
+        profileId: requestBody.profileId,
+        rootFolder: requestBody.rootFolder,
+        tags: requestBody.tags,
+        isAutoRequest: options.isAutoRequest ?? false,
+      });
+
+      await requestRepository.save(request);
+      return request;
     }
 
     const tmdbMedia =
@@ -606,6 +734,9 @@ export class MediaRequest {
   public tags?: number[];
 
   @Column({ default: false })
+  public isAudiobook: boolean;
+
+  @Column({ default: false })
   public isAutoRequest: boolean;
 
   constructor(init?: Partial<MediaRequest>) {
@@ -719,7 +850,13 @@ export class MediaRequest {
     const tmdb = new TheMovieDb();
 
     try {
-      const mediaType = entity.type === MediaType.MOVIE ? 'Movie' : 'Series';
+      const mediaTypeLabels: Record<string, string> = {
+        [MediaType.MOVIE]: 'Movie',
+        [MediaType.TV]: 'Series',
+        [MediaType.BOOK]: 'Book',
+        [MediaType.MUSIC]: 'Music',
+      };
+      const mediaType = mediaTypeLabels[entity.type] ?? 'Media';
       let event: string | undefined;
       let notifyAdmin = true;
       let notifySystem = true;
@@ -798,6 +935,21 @@ export class MediaRequest {
                 .join(', '),
             },
           ],
+        });
+      } else if (
+        entity.type === MediaType.BOOK ||
+        entity.type === MediaType.MUSIC
+      ) {
+        notificationManager.sendNotification(type, {
+          media,
+          request: entity,
+          notifyAdmin,
+          notifySystem,
+          notifyUser: notifyAdmin ? undefined : entity.requestedBy,
+          event,
+          subject: media.googleBooksId ?? media.musicBrainzId ?? 'Unknown',
+          message: '',
+          image: '',
         });
       }
     } catch (e) {

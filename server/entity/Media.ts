@@ -1,4 +1,5 @@
 import RadarrAPI from '@server/api/servarr/radarr';
+import ServarrBase from '@server/api/servarr/base';
 import SonarrAPI from '@server/api/servarr/sonarr';
 import { MediaStatus, MediaType } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
@@ -83,6 +84,27 @@ class Media {
     }
   }
 
+  public static async getMediaByExternalId(
+    externalId: string,
+    mediaType: MediaType
+  ): Promise<Media | undefined> {
+    const mediaRepository = getRepository(Media);
+
+    try {
+      const field =
+        mediaType === MediaType.BOOK ? 'googleBooksId' : 'musicBrainzId';
+      const media = await mediaRepository.findOne({
+        where: { [field]: externalId, mediaType },
+        relations: { requests: true, issues: true },
+      });
+
+      return media ?? undefined;
+    } catch (e) {
+      logger.error(e.message);
+      return undefined;
+    }
+  }
+
   @PrimaryGeneratedColumn()
   public id: number;
 
@@ -100,6 +122,14 @@ class Media {
   @Column({ nullable: true })
   @Index()
   public imdbId?: string;
+
+  @Column({ nullable: true, type: 'varchar' })
+  @Index()
+  public googleBooksId?: string | null;
+
+  @Column({ nullable: true, type: 'varchar' })
+  @Index()
+  public musicBrainzId?: string | null;
 
   @Column({ type: 'int', default: MediaStatus.UNKNOWN })
   @Index()
@@ -319,6 +349,36 @@ class Media {
                 server,
                 `/series/${this.externalServiceSlug4k}`
               );
+        }
+      }
+    }
+
+    if (this.mediaType === MediaType.BOOK) {
+      if (this.serviceId !== null && this.externalServiceSlug !== null) {
+        const settings = getSettings();
+        const server = settings.readarr.find(
+          (readarr) => readarr.id === this.serviceId
+        );
+
+        if (server) {
+          this.serviceUrl = server.externalUrl
+            ? `${server.externalUrl}/book/${this.externalServiceSlug}`
+            : ServarrBase.buildUrl(server, `/book/${this.externalServiceSlug}`);
+        }
+      }
+    }
+
+    if (this.mediaType === MediaType.MUSIC) {
+      if (this.serviceId !== null && this.externalServiceSlug !== null) {
+        const settings = getSettings();
+        const server = settings.lidarr.find(
+          (lidarr) => lidarr.id === this.serviceId
+        );
+
+        if (server) {
+          this.serviceUrl = server.externalUrl
+            ? `${server.externalUrl}/album/${this.externalServiceSlug}`
+            : ServarrBase.buildUrl(server, `/album/${this.externalServiceSlug}`);
         }
       }
     }

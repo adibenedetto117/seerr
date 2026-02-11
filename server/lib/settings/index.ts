@@ -95,6 +95,26 @@ export interface SonarrSettings extends DVRSettings {
   enableSeasonFolders: boolean;
 }
 
+export interface ReadarrSettings extends DVRSettings {
+  minimumAvailability: string;
+}
+
+export interface LidarrSettings extends DVRSettings {
+  minimumAvailability: string;
+}
+
+export interface LazyLibrarianSettings {
+  id: number;
+  name: string;
+  hostname: string;
+  port: number;
+  apiKey: string;
+  useSsl: boolean;
+  baseUrl?: string;
+  isDefault: boolean;
+  externalUrl?: string;
+}
+
 interface Quota {
   quotaLimit?: number;
   quotaDays?: number;
@@ -130,6 +150,8 @@ export interface MainSettings {
   defaultQuotas: {
     movie: Quota;
     tv: Quota;
+    book: Quota;
+    music: Quota;
   };
   hideAvailable: boolean;
   hideBlacklisted: boolean;
@@ -340,6 +362,8 @@ export type JobId =
   | 'plex-refresh-token'
   | 'radarr-scan'
   | 'sonarr-scan'
+  | 'readarr-scan'
+  | 'lidarr-scan'
   | 'download-sync'
   | 'download-sync-reset'
   | 'jellyfin-recently-added-scan'
@@ -358,6 +382,9 @@ export interface AllSettings {
   tautulli: TautulliSettings;
   radarr: RadarrSettings[];
   sonarr: SonarrSettings[];
+  readarr: ReadarrSettings[];
+  lidarr: LidarrSettings[];
+  lazyLibrarian: LazyLibrarianSettings[];
   public: PublicSettings;
   notifications: NotificationSettings;
   jobs: Record<JobId, JobSettings>;
@@ -387,6 +414,8 @@ class Settings {
         defaultQuotas: {
           movie: {},
           tv: {},
+          book: {},
+          music: {},
         },
         hideAvailable: false,
         hideBlacklisted: false,
@@ -430,6 +459,9 @@ class Settings {
       },
       radarr: [],
       sonarr: [],
+      readarr: [],
+      lidarr: [],
+      lazyLibrarian: [],
       public: {
         initialized: false,
       },
@@ -552,6 +584,12 @@ class Settings {
         'sonarr-scan': {
           schedule: '0 30 4 * * *',
         },
+        'readarr-scan': {
+          schedule: '0 0 5 * * *',
+        },
+        'lidarr-scan': {
+          schedule: '0 30 5 * * *',
+        },
         'availability-sync': {
           schedule: '0 0 5 * * *',
         },
@@ -655,6 +693,30 @@ class Settings {
 
   set sonarr(data: SonarrSettings[]) {
     this.data.sonarr = data;
+  }
+
+  get readarr(): ReadarrSettings[] {
+    return this.data.readarr;
+  }
+
+  set readarr(data: ReadarrSettings[]) {
+    this.data.readarr = data;
+  }
+
+  get lidarr(): LidarrSettings[] {
+    return this.data.lidarr;
+  }
+
+  set lidarr(data: LidarrSettings[]) {
+    this.data.lidarr = data;
+  }
+
+  get lazyLibrarian(): LazyLibrarianSettings[] {
+    return this.data.lazyLibrarian;
+  }
+
+  set lazyLibrarian(data: LazyLibrarianSettings[]) {
+    this.data.lazyLibrarian = data;
   }
 
   get public(): PublicSettings {

@@ -334,6 +334,48 @@ export class User {
         ).reduce((sum: number, req: MediaRequest) => sum + req.seasonCount, 0)
       : 0;
 
+    const bookQuotaLimit = !canBypass
+      ? (defaultQuotas.book?.quotaLimit ?? 0)
+      : 0;
+    const bookQuotaDays = defaultQuotas.book?.quotaDays;
+
+    const bookDate = new Date();
+    if (bookQuotaDays) {
+      bookDate.setDate(bookDate.getDate() - bookQuotaDays);
+    }
+
+    const bookQuotaUsed = bookQuotaLimit
+      ? await requestRepository.count({
+          where: {
+            requestedBy: { id: this.id },
+            createdAt: AfterDate(bookDate),
+            type: MediaType.BOOK,
+            status: Not(MediaRequestStatus.DECLINED),
+          },
+        })
+      : 0;
+
+    const musicQuotaLimit = !canBypass
+      ? (defaultQuotas.music?.quotaLimit ?? 0)
+      : 0;
+    const musicQuotaDays = defaultQuotas.music?.quotaDays;
+
+    const musicDate = new Date();
+    if (musicQuotaDays) {
+      musicDate.setDate(musicDate.getDate() - musicQuotaDays);
+    }
+
+    const musicQuotaUsed = musicQuotaLimit
+      ? await requestRepository.count({
+          where: {
+            requestedBy: { id: this.id },
+            createdAt: AfterDate(musicDate),
+            type: MediaType.MUSIC,
+            status: Not(MediaRequestStatus.DECLINED),
+          },
+        })
+      : 0;
+
     return {
       movie: {
         days: movieQuotaDays,
@@ -356,6 +398,28 @@ export class User {
           : undefined,
         restricted:
           tvQuotaLimit && tvQuotaLimit - tvQuotaUsed <= 0 ? true : false,
+      },
+      book: {
+        days: bookQuotaDays,
+        limit: bookQuotaLimit,
+        used: bookQuotaUsed,
+        remaining: bookQuotaLimit
+          ? Math.max(0, bookQuotaLimit - bookQuotaUsed)
+          : undefined,
+        restricted:
+          bookQuotaLimit && bookQuotaLimit - bookQuotaUsed <= 0 ? true : false,
+      },
+      music: {
+        days: musicQuotaDays,
+        limit: musicQuotaLimit,
+        used: musicQuotaUsed,
+        remaining: musicQuotaLimit
+          ? Math.max(0, musicQuotaLimit - musicQuotaUsed)
+          : undefined,
+        restricted:
+          musicQuotaLimit && musicQuotaLimit - musicQuotaUsed <= 0
+            ? true
+            : false,
       },
     };
   }

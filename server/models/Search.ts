@@ -9,8 +9,10 @@ import type {
 } from '@server/api/themoviedb/interfaces';
 import { MediaType as MainMediaType } from '@server/constants/media';
 import type Media from '@server/entity/Media';
+import type { BookResult } from '@server/models/Book';
+import type { MusicReleaseResult } from '@server/models/Music';
 
-export type MediaType = 'tv' | 'movie' | 'person' | 'collection';
+export type MediaType = 'tv' | 'movie' | 'person' | 'collection' | 'book' | 'music';
 
 interface SearchResult {
   id: number;
@@ -66,7 +68,7 @@ export interface PersonResult {
   knownFor: (MovieResult | TvResult)[];
 }
 
-export type Results = MovieResult | TvResult | PersonResult | CollectionResult;
+export type Results = MovieResult | TvResult | PersonResult | CollectionResult | BookResult | MusicReleaseResult;
 
 export const mapMovieResult = (
   movieResult: TmdbMovieResult,

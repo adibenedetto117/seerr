@@ -4,13 +4,18 @@ export type AvailableCacheIds =
   | 'tmdb'
   | 'radarr'
   | 'sonarr'
+  | 'readarr'
+  | 'lidarr'
   | 'rt'
   | 'imdb'
   | 'github'
   | 'plexguid'
   | 'plextv'
   | 'plexwatchlist'
-  | 'tvdb';
+  | 'tvdb'
+  | 'googlebooks'
+  | 'openlibrary'
+  | 'musicbrainz';
 
 const DEFAULT_TTL = 300;
 const DEFAULT_CHECK_PERIOD = 120;
@@ -50,6 +55,8 @@ class CacheManager {
     }),
     radarr: new Cache('radarr', 'Radarr API'),
     sonarr: new Cache('sonarr', 'Sonarr API'),
+    readarr: new Cache('readarr', 'Readarr API'),
+    lidarr: new Cache('lidarr', 'Lidarr API'),
     rt: new Cache('rt', 'Rotten Tomatoes API', {
       stdTtl: 43200,
       checkPeriod: 60 * 30,
@@ -72,6 +79,18 @@ class CacheManager {
     }),
     plexwatchlist: new Cache('plexwatchlist', 'Plex Watchlist'),
     tvdb: new Cache('tvdb', 'The TVDB API', {
+      stdTtl: 21600,
+      checkPeriod: 60 * 30,
+    }),
+    googlebooks: new Cache('googlebooks', 'Google Books API', {
+      stdTtl: 21600,
+      checkPeriod: 60 * 30,
+    }),
+    openlibrary: new Cache('openlibrary', 'OpenLibrary API', {
+      stdTtl: 21600,
+      checkPeriod: 60 * 30,
+    }),
+    musicbrainz: new Cache('musicbrainz', 'MusicBrainz API', {
       stdTtl: 21600,
       checkPeriod: 60 * 30,
     }),

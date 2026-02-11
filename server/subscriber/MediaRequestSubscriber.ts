@@ -1,10 +1,15 @@
+import type { LidarrAlbumOptions } from '@server/api/servarr/lidarr';
+import LidarrAPI from '@server/api/servarr/lidarr';
 import type { RadarrMovieOptions } from '@server/api/servarr/radarr';
 import RadarrAPI from '@server/api/servarr/radarr';
+import type { ReadarrBookOptions } from '@server/api/servarr/readarr';
+import ReadarrAPI from '@server/api/servarr/readarr';
 import type {
   AddSeriesOptions,
   SonarrSeries,
 } from '@server/api/servarr/sonarr';
 import SonarrAPI from '@server/api/servarr/sonarr';
+import ServarrBase from '@server/api/servarr/base';
 import TheMovieDb from '@server/api/themoviedb';
 import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
 import {
@@ -754,6 +759,308 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     }
   }
 
+  public async sendToReadarr(entity: MediaRequest): Promise<void> {
+    if (
+      entity.status === MediaRequestStatus.APPROVED &&
+      entity.type === MediaType.BOOK
+    ) {
+      try {
+        const mediaRepository = getRepository(Media);
+        const settings = getSettings();
+        if (settings.readarr.length === 0) {
+          logger.info(
+            'No Readarr server configured, skipping request processing',
+            {
+              label: 'Media Request',
+              requestId: entity.id,
+              mediaId: entity.media.id,
+            }
+          );
+          return;
+        }
+
+        let readarrSettings = settings.readarr.find(
+          (r) => r.isDefault && !r.is4k
+        );
+
+        if (
+          entity.serverId !== null &&
+          entity.serverId >= 0 &&
+          readarrSettings?.id !== entity.serverId
+        ) {
+          readarrSettings = settings.readarr.find(
+            (r) => r.id === entity.serverId
+          );
+        }
+
+        if (!readarrSettings) {
+          logger.warn('No default Readarr server configured.', {
+            label: 'Media Request',
+            requestId: entity.id,
+          });
+          return;
+        }
+
+        const media = await mediaRepository.findOne({
+          where: { id: entity.media.id },
+        });
+
+        if (!media) {
+          logger.error('Media data not found', {
+            label: 'Media Request',
+            requestId: entity.id,
+            mediaId: entity.media.id,
+          });
+          return;
+        }
+
+        if (media.status === MediaStatus.AVAILABLE) {
+          logger.warn('Media already exists, marking request as APPROVED', {
+            label: 'Media Request',
+            requestId: entity.id,
+          });
+          return;
+        }
+
+        const readarr = new ReadarrAPI({
+          apiKey: readarrSettings.apiKey,
+          url: ServarrBase.buildUrl(readarrSettings, '/api/v1'),
+        });
+
+        let rootFolder = readarrSettings.activeDirectory;
+        let qualityProfile = readarrSettings.activeProfileId;
+        let tags = readarrSettings.tags ? [...readarrSettings.tags] : [];
+
+        if (entity.rootFolder && entity.rootFolder !== '') {
+          rootFolder = entity.rootFolder;
+        }
+        if (entity.profileId) {
+          qualityProfile = entity.profileId;
+        }
+        if (entity.tags && !isEqual(entity.tags, readarrSettings.tags)) {
+          tags = entity.tags;
+        }
+
+        const readarrBookOptions: ReadarrBookOptions = {
+          title: media.googleBooksId ?? '',
+          qualityProfileId: qualityProfile,
+          metadataProfileId: 1,
+          rootFolderPath: rootFolder,
+          foreignBookId: media.googleBooksId ?? '',
+          monitored: true,
+          tags,
+          searchNow: !readarrSettings.preventSearch,
+        };
+
+        readarr
+          .addBook(readarrBookOptions)
+          .then(async (readarrBook) => {
+            const media = await mediaRepository.findOne({
+              where: { id: entity.media.id },
+            });
+            if (!media) throw new Error('Media data not found');
+
+            media.externalServiceId = readarrBook.id;
+            media.externalServiceSlug = readarrBook.titleSlug;
+            media.serviceId = readarrSettings?.id;
+            await mediaRepository.save(media);
+          })
+          .catch(async () => {
+            const requestRepository = getRepository(MediaRequest);
+            entity.status = MediaRequestStatus.FAILED;
+            requestRepository.save(entity);
+
+            logger.warn(
+              'Something went wrong sending book request to Readarr, marking status as FAILED',
+              {
+                label: 'Media Request',
+                requestId: entity.id,
+                mediaId: entity.media.id,
+              }
+            );
+
+            MediaRequest.sendNotification(
+              entity,
+              media,
+              Notification.MEDIA_FAILED
+            );
+          })
+          .finally(() => {
+            readarr.clearCache({
+              foreignBookId: media.googleBooksId,
+              externalId: media.externalServiceId,
+            });
+          });
+
+        logger.info('Sent request to Readarr', {
+          label: 'Media Request',
+          requestId: entity.id,
+          mediaId: entity.media.id,
+        });
+      } catch (e) {
+        logger.error('Something went wrong sending request to Readarr', {
+          label: 'Media Request',
+          errorMessage: e.message,
+          requestId: entity.id,
+          mediaId: entity.media.id,
+        });
+        throw new Error(e.message);
+      }
+    }
+  }
+
+  public async sendToLidarr(entity: MediaRequest): Promise<void> {
+    if (
+      entity.status === MediaRequestStatus.APPROVED &&
+      entity.type === MediaType.MUSIC
+    ) {
+      try {
+        const mediaRepository = getRepository(Media);
+        const settings = getSettings();
+        if (settings.lidarr.length === 0) {
+          logger.info(
+            'No Lidarr server configured, skipping request processing',
+            {
+              label: 'Media Request',
+              requestId: entity.id,
+              mediaId: entity.media.id,
+            }
+          );
+          return;
+        }
+
+        let lidarrSettings = settings.lidarr.find(
+          (l) => l.isDefault && !l.is4k
+        );
+
+        if (
+          entity.serverId !== null &&
+          entity.serverId >= 0 &&
+          lidarrSettings?.id !== entity.serverId
+        ) {
+          lidarrSettings = settings.lidarr.find(
+            (l) => l.id === entity.serverId
+          );
+        }
+
+        if (!lidarrSettings) {
+          logger.warn('No default Lidarr server configured.', {
+            label: 'Media Request',
+            requestId: entity.id,
+          });
+          return;
+        }
+
+        const media = await mediaRepository.findOne({
+          where: { id: entity.media.id },
+        });
+
+        if (!media) {
+          logger.error('Media data not found', {
+            label: 'Media Request',
+            requestId: entity.id,
+            mediaId: entity.media.id,
+          });
+          return;
+        }
+
+        if (media.status === MediaStatus.AVAILABLE) {
+          logger.warn('Media already exists, marking request as APPROVED', {
+            label: 'Media Request',
+            requestId: entity.id,
+          });
+          return;
+        }
+
+        const lidarr = new LidarrAPI({
+          apiKey: lidarrSettings.apiKey,
+          url: ServarrBase.buildUrl(lidarrSettings, '/api/v1'),
+        });
+
+        let rootFolder = lidarrSettings.activeDirectory;
+        let qualityProfile = lidarrSettings.activeProfileId;
+        let tags = lidarrSettings.tags ? [...lidarrSettings.tags] : [];
+
+        if (entity.rootFolder && entity.rootFolder !== '') {
+          rootFolder = entity.rootFolder;
+        }
+        if (entity.profileId) {
+          qualityProfile = entity.profileId;
+        }
+        if (entity.tags && !isEqual(entity.tags, lidarrSettings.tags)) {
+          tags = entity.tags;
+        }
+
+        const lidarrAlbumOptions: LidarrAlbumOptions = {
+          title: media.musicBrainzId ?? '',
+          qualityProfileId: qualityProfile,
+          metadataProfileId: 1,
+          rootFolderPath: rootFolder,
+          foreignAlbumId: media.musicBrainzId ?? '',
+          foreignArtistId: '',
+          artistName: '',
+          monitored: true,
+          tags,
+          searchNow: !lidarrSettings.preventSearch,
+        };
+
+        lidarr
+          .addAlbum(lidarrAlbumOptions)
+          .then(async (lidarrAlbum) => {
+            const media = await mediaRepository.findOne({
+              where: { id: entity.media.id },
+            });
+            if (!media) throw new Error('Media data not found');
+
+            media.externalServiceId = lidarrAlbum.id;
+            media.externalServiceSlug = lidarrAlbum.foreignAlbumId;
+            media.serviceId = lidarrSettings?.id;
+            await mediaRepository.save(media);
+          })
+          .catch(async () => {
+            const requestRepository = getRepository(MediaRequest);
+            entity.status = MediaRequestStatus.FAILED;
+            requestRepository.save(entity);
+
+            logger.warn(
+              'Something went wrong sending music request to Lidarr, marking status as FAILED',
+              {
+                label: 'Media Request',
+                requestId: entity.id,
+                mediaId: entity.media.id,
+              }
+            );
+
+            MediaRequest.sendNotification(
+              entity,
+              media,
+              Notification.MEDIA_FAILED
+            );
+          })
+          .finally(() => {
+            lidarr.clearCache({
+              foreignAlbumId: media.musicBrainzId,
+              externalId: media.externalServiceId,
+            });
+          });
+
+        logger.info('Sent request to Lidarr', {
+          label: 'Media Request',
+          requestId: entity.id,
+          mediaId: entity.media.id,
+        });
+      } catch (e) {
+        logger.error('Something went wrong sending request to Lidarr', {
+          label: 'Media Request',
+          errorMessage: e.message,
+          requestId: entity.id,
+          mediaId: entity.media.id,
+        });
+        throw new Error(e.message);
+      }
+    }
+  }
+
   public async updateParentStatus(entity: MediaRequest): Promise<void> {
     const mediaRepository = getRepository(Media);
     const media = await mediaRepository.findOne({
@@ -782,7 +1089,9 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     }
 
     if (
-      media.mediaType === MediaType.MOVIE &&
+      (media.mediaType === MediaType.MOVIE ||
+        media.mediaType === MediaType.BOOK ||
+        media.mediaType === MediaType.MUSIC) &&
       entity.status === MediaRequestStatus.DECLINED &&
       media[entity.is4k ? 'status4k' : 'status'] !== MediaStatus.DELETED
     ) {
@@ -856,6 +1165,8 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
 
     this.sendToRadarr(event.entity as MediaRequest);
     this.sendToSonarr(event.entity as MediaRequest);
+    this.sendToReadarr(event.entity as MediaRequest);
+    this.sendToLidarr(event.entity as MediaRequest);
 
     this.updateParentStatus(event.entity as MediaRequest);
 
@@ -876,6 +1187,8 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
 
     this.sendToRadarr(event.entity as MediaRequest);
     this.sendToSonarr(event.entity as MediaRequest);
+    this.sendToReadarr(event.entity as MediaRequest);
+    this.sendToLidarr(event.entity as MediaRequest);
 
     this.updateParentStatus(event.entity as MediaRequest);
   }

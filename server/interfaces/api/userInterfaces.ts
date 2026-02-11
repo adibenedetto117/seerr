@@ -22,6 +22,8 @@ export interface QuotaStatus {
 export interface QuotaResponse {
   movie: QuotaStatus;
   tv: QuotaStatus;
+  book?: QuotaStatus;
+  music?: QuotaStatus;
 }
 
 export interface UserWatchDataResponse {

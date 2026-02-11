@@ -6,6 +6,8 @@ import useVerticalScroll from '@app/hooks/useVerticalScroll';
 import globalMessages from '@app/i18n/globalMessages';
 import { MediaStatus } from '@server/constants/media';
 import type { WatchlistItem } from '@server/interfaces/api/discoverInterfaces';
+import type { BookResult } from '@server/models/Book';
+import type { MusicReleaseResult } from '@server/models/Music';
 import type {
   CollectionResult,
   MovieResult,
@@ -15,7 +17,7 @@ import type {
 import { useIntl } from 'react-intl';
 
 type ListViewProps = {
-  items?: (TvResult | MovieResult | PersonResult | CollectionResult)[];
+  items?: (TvResult | MovieResult | PersonResult | CollectionResult | BookResult | MusicReleaseResult)[];
   plexItems?: WatchlistItem[];
   isEmpty?: boolean;
   isLoading?: boolean;
@@ -129,6 +131,42 @@ const ListView = ({
                     summary={title.overview}
                     title={title.title}
                     mediaType={title.mediaType}
+                    canExpand
+                  />
+                );
+                break;
+              case 'book':
+                titleCard = (
+                  <TitleCard
+                    key={title.id}
+                    id={title.id}
+                    image={title.coverPath}
+                    status={title.mediaInfo?.status}
+                    summary={title.description}
+                    title={title.title}
+                    year={title.publishedDate}
+                    mediaType={title.mediaType}
+                    inProgress={
+                      (title.mediaInfo?.downloadStatus ?? []).length > 0
+                    }
+                    canExpand
+                  />
+                );
+                break;
+              case 'music':
+                titleCard = (
+                  <TitleCard
+                    key={title.id}
+                    id={title.id}
+                    image={title.coverUrl}
+                    status={title.mediaInfo?.status}
+                    summary={title.artistName}
+                    title={title.title}
+                    year={title.releaseDate}
+                    mediaType={title.mediaType}
+                    inProgress={
+                      (title.mediaInfo?.downloadStatus ?? []).length > 0
+                    }
                     canExpand
                   />
                 );

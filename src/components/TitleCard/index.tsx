@@ -31,7 +31,7 @@ import { useToasts } from 'react-toast-notifications';
 import { mutate } from 'swr';
 
 interface TitleCardProps {
-  id: number;
+  id: number | string;
   image?: string;
   summary?: string;
   year?: string;
@@ -254,13 +254,17 @@ const TitleCard = ({
 
   const closeModal = useCallback(() => setShowRequestModal(false), []);
 
+  const requestPermission =
+    mediaType === 'movie' || mediaType === 'collection'
+      ? Permission.REQUEST_MOVIE
+      : mediaType === 'book'
+        ? Permission.REQUEST_BOOK
+        : mediaType === 'music'
+          ? Permission.REQUEST_MUSIC
+          : Permission.REQUEST_TV;
+
   const showRequestButton = hasPermission(
-    [
-      Permission.REQUEST,
-      mediaType === 'movie' || mediaType === 'collection'
-        ? Permission.REQUEST_MOVIE
-        : Permission.REQUEST_TV,
-    ],
+    [Permission.REQUEST, requestPermission],
     { type: 'or' }
   );
 
@@ -275,14 +279,19 @@ const TitleCard = ({
       ref={cardRef}
     >
       <RequestModal
-        tmdbId={id}
+        tmdbId={mediaType === 'book' || mediaType === 'music' ? undefined : id}
+        externalId={mediaType === 'book' || mediaType === 'music' ? String(id) : undefined}
         show={showRequestModal}
         type={
           mediaType === 'movie'
             ? 'movie'
             : mediaType === 'collection'
               ? 'collection'
-              : 'tv'
+              : mediaType === 'book'
+                ? 'book'
+                : mediaType === 'music'
+                  ? 'music'
+                  : 'tv'
         }
         onComplete={requestComplete}
         onUpdating={requestUpdating}
@@ -295,7 +304,11 @@ const TitleCard = ({
             ? 'movie'
             : mediaType === 'collection'
               ? 'collection'
-              : 'tv'
+              : mediaType === 'book'
+                ? 'book'
+                : mediaType === 'music'
+                  ? 'music'
+                  : 'tv'
         }
         show={showBlacklistModal}
         onCancel={closeBlacklistModal}
@@ -328,12 +341,14 @@ const TitleCard = ({
       >
         <div className="absolute inset-0 h-full w-full overflow-hidden">
           <CachedImage
-            type="tmdb"
+            type={mediaType === 'book' || mediaType === 'music' ? 'external' : 'tmdb'}
             className="absolute inset-0 h-full w-full"
             alt=""
             src={
               image
-                ? `https://image.tmdb.org/t/p/w300_and_h450_face${image}`
+                ? mediaType === 'book' || mediaType === 'music'
+                  ? image
+                  : `https://image.tmdb.org/t/p/w300_and_h450_face${image}`
                 : `/images/seerr_poster_not_found_logo_top.png`
             }
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -344,7 +359,11 @@ const TitleCard = ({
               className={`pointer-events-none z-40 self-start rounded-full border bg-opacity-80 shadow-md ${
                 mediaType === 'movie' || mediaType === 'collection'
                   ? 'border-blue-500 bg-blue-600'
-                  : 'border-purple-600 bg-purple-600'
+                  : mediaType === 'book'
+                    ? 'border-green-500 bg-green-600'
+                    : mediaType === 'music'
+                      ? 'border-pink-500 bg-pink-600'
+                      : 'border-purple-600 bg-purple-600'
               }`}
             >
               <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
@@ -352,12 +371,18 @@ const TitleCard = ({
                   ? intl.formatMessage(globalMessages.movie)
                   : mediaType === 'collection'
                     ? intl.formatMessage(globalMessages.collection)
-                    : intl.formatMessage(globalMessages.tvshow)}
+                    : mediaType === 'book'
+                      ? intl.formatMessage(globalMessages.book)
+                      : mediaType === 'music'
+                        ? intl.formatMessage(globalMessages.music)
+                        : intl.formatMessage(globalMessages.tvshow)}
               </div>
             </div>
             {showDetail && currentStatus !== MediaStatus.BLACKLISTED && (
               <div className="flex flex-col gap-1">
                 {user?.userType !== UserType.PLEX &&
+                  mediaType !== 'book' &&
+                  mediaType !== 'music' &&
                   (toggleWatchlist ? (
                     <Button
                       buttonType={'ghost'}
@@ -454,7 +479,11 @@ const TitleCard = ({
                     ? `/movie/${id}`
                     : mediaType === 'collection'
                       ? `/collection/${id}`
-                      : `/tv/${id}`
+                      : mediaType === 'book'
+                        ? `/book/${id}`
+                        : mediaType === 'music'
+                          ? `/music/release/${id}`
+                          : `/tv/${id}`
                 }
                 className="absolute inset-0 h-full w-full cursor-pointer overflow-hidden text-left"
                 style={{

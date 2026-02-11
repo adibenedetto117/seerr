@@ -173,6 +173,16 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
             type: MediaType.TV,
           });
           break;
+        case 'book':
+          query = query.andWhere('request.type = :type', {
+            type: MediaType.BOOK,
+          });
+          break;
+        case 'music':
+          query = query.andWhere('request.type = :type', {
+            type: MediaType.MUSIC,
+          });
+          break;
       }
 
       const [requests, requestCount] = await query
@@ -234,6 +244,9 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
                 ?.profiles?.find((profile) => profile.id === r.profileId)?.name,
             };
           }
+          default: {
+            return { ...r };
+          }
         }
       });
 
@@ -244,7 +257,6 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
             case MediaType.MOVIE: {
               return {
                 ...r,
-                // check if the radarr server for this request is configured
                 canRemove: radarrServers.some(
                   (server) =>
                     server.id ===
@@ -255,13 +267,15 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
             case MediaType.TV: {
               return {
                 ...r,
-                // check if the sonarr server for this request is configured
                 canRemove: sonarrServers.some(
                   (server) =>
                     server.id ===
                     (r.is4k ? r.media.serviceId4k : r.media.serviceId)
                 ),
               };
+            }
+            default: {
+              return { ...r, canRemove: false };
             }
           }
         });
@@ -292,6 +306,8 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
                 settings.sonarr.find((r) => r.id === s.id)?.name ||
                 `Sonarr ${s.id}`,
             })),
+          readarr: [],
+          lidarr: [],
         },
       });
     } catch (e) {

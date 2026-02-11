@@ -41,7 +41,10 @@ import semver from 'semver';
 import { URL } from 'url';
 import metadataRoutes from './metadata';
 import notificationRoutes from './notifications';
+import lazyLibrarianRoutes from './lazylibrarian';
+import lidarrRoutes from './lidarr';
 import radarrRoutes from './radarr';
+import readarrRoutes from './readarr';
 import sonarrRoutes from './sonarr';
 
 const settingsRoutes = Router();
@@ -49,6 +52,9 @@ const settingsRoutes = Router();
 settingsRoutes.use('/notifications', notificationRoutes);
 settingsRoutes.use('/radarr', radarrRoutes);
 settingsRoutes.use('/sonarr', sonarrRoutes);
+settingsRoutes.use('/readarr', readarrRoutes);
+settingsRoutes.use('/lidarr', lidarrRoutes);
+settingsRoutes.use('/lazylibrarian', lazyLibrarianRoutes);
 settingsRoutes.use('/discover', discoverSettingRoutes);
 settingsRoutes.use('/metadatas', metadataRoutes);
 

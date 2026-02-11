@@ -10,6 +10,8 @@ export interface RequestResultsResponse extends PaginatedResponse {
   serviceErrors: {
     radarr: { id: number; name: string }[];
     sonarr: { id: number; name: string }[];
+    readarr: { id: number; name: string }[];
+    lidarr: { id: number; name: string }[];
   };
 }
 
@@ -19,6 +21,8 @@ export type MediaRequestBody = {
   tvdbId?: number;
   seasons?: number[] | 'all';
   is4k?: boolean;
+  isAudiobook?: boolean;
+  externalId?: string;
   serverId?: number;
   profileId?: number;
   profileName?: string;

@@ -1,5 +1,7 @@
+import BookRequestModal from '@app/components/RequestModal/BookRequestModal';
 import CollectionRequestModal from '@app/components/RequestModal/CollectionRequestModal';
 import MovieRequestModal from '@app/components/RequestModal/MovieRequestModal';
+import MusicRequestModal from '@app/components/RequestModal/MusicRequestModal';
 import TvRequestModal from '@app/components/RequestModal/TvRequestModal';
 import { Transition } from '@headlessui/react';
 import type { MediaStatus } from '@server/constants/media';
@@ -8,8 +10,9 @@ import type { NonFunctionProperties } from '@server/interfaces/api/common';
 
 interface RequestModalProps {
   show: boolean;
-  type: 'movie' | 'tv' | 'collection';
-  tmdbId: number;
+  type: 'movie' | 'tv' | 'collection' | 'book' | 'music';
+  tmdbId?: number;
+  externalId?: string;
   is4k?: boolean;
   editRequest?: NonFunctionProperties<MediaRequest>;
   onComplete?: (newStatus: MediaStatus) => void;
@@ -21,6 +24,7 @@ const RequestModal = ({
   type,
   show,
   tmdbId,
+  externalId,
   is4k,
   editRequest,
   onComplete,
@@ -42,7 +46,7 @@ const RequestModal = ({
         <MovieRequestModal
           onComplete={onComplete}
           onCancel={onCancel}
-          tmdbId={tmdbId}
+          tmdbId={tmdbId ?? 0}
           onUpdating={onUpdating}
           is4k={is4k}
           editRequest={editRequest}
@@ -51,16 +55,32 @@ const RequestModal = ({
         <TvRequestModal
           onComplete={onComplete}
           onCancel={onCancel}
-          tmdbId={tmdbId}
+          tmdbId={tmdbId ?? 0}
           onUpdating={onUpdating}
           is4k={is4k}
+          editRequest={editRequest}
+        />
+      ) : type === 'book' ? (
+        <BookRequestModal
+          onComplete={onComplete}
+          onCancel={onCancel}
+          externalId={externalId ?? ''}
+          onUpdating={onUpdating}
+          editRequest={editRequest}
+        />
+      ) : type === 'music' ? (
+        <MusicRequestModal
+          onComplete={onComplete}
+          onCancel={onCancel}
+          externalId={externalId ?? ''}
+          onUpdating={onUpdating}
           editRequest={editRequest}
         />
       ) : (
         <CollectionRequestModal
           onComplete={onComplete}
           onCancel={onCancel}
-          tmdbId={tmdbId}
+          tmdbId={tmdbId ?? 0}
           onUpdating={onUpdating}
           is4k={is4k}
         />

@@ -4,6 +4,8 @@ import PageTitle from '@app/components/Common/PageTitle';
 import useDiscover from '@app/hooks/useDiscover';
 import Error from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
+import type { BookResult } from '@server/models/Book';
+import type { MusicReleaseResult } from '@server/models/Music';
 import type {
   MovieResult,
   PersonResult,
@@ -29,7 +31,7 @@ const Search = () => {
     titles,
     fetchMore,
     error,
-  } = useDiscover<MovieResult | TvResult | PersonResult>(
+  } = useDiscover<MovieResult | TvResult | PersonResult | BookResult | MusicReleaseResult>(
     `/api/v1/search`,
     {
       query: router.query.query,

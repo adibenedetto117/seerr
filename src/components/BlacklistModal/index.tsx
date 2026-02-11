@@ -10,7 +10,7 @@ import { useIntl } from 'react-intl';
 
 interface BlacklistModalProps {
   tmdbId: number;
-  type: 'movie' | 'tv' | 'collection';
+  type: 'movie' | 'tv' | 'collection' | 'book' | 'music';
   show: boolean;
   onComplete?: () => void;
   onCancel?: () => void;

@@ -16,7 +16,13 @@ import { Transition } from '@headlessui/react';
 import { PencilIcon, PlusIcon, TrashIcon } from '@heroicons/react/24/solid';
 import type OverrideRule from '@server/entity/OverrideRule';
 import type { OverrideRuleResultsResponse } from '@server/interfaces/api/overrideRuleInterfaces';
-import type { RadarrSettings, SonarrSettings } from '@server/lib/settings';
+import type {
+  LazyLibrarianSettings,
+  LidarrSettings,
+  RadarrSettings,
+  ReadarrSettings,
+  SonarrSettings,
+} from '@server/lib/settings';
 import axios from 'axios';
 import { Fragment, useState } from 'react';
 import { useIntl } from 'react-intl';
@@ -50,6 +56,14 @@ const messages = defineMessages('components.Settings', {
   overrideRulesDescription:
     'Override rules allow you to specify properties that will be replaced if a request matches the rule.',
   addrule: 'New Override Rule',
+  readarrsettings: 'Readarr Settings',
+  lidarrsettings: 'Lidarr Settings',
+  lazylibrariansettings: 'LazyLibrarian Settings',
+  addreadarr: 'Add Readarr Server',
+  addlidarr: 'Add Lidarr Server',
+  addlazylibrarian: 'Add LazyLibrarian Server',
+  mediaTypeBook: 'book',
+  mediaTypeMusic: 'music',
 });
 
 interface ServerInstanceProps {
@@ -215,6 +229,21 @@ const SettingsServices = () => {
     error: sonarrError,
     mutate: revalidateSonarr,
   } = useSWR<SonarrSettings[]>('/api/v1/settings/sonarr');
+  const {
+    data: readarrData,
+    error: readarrError,
+    mutate: revalidateReadarr,
+  } = useSWR<ReadarrSettings[]>('/api/v1/settings/readarr');
+  const {
+    data: lidarrData,
+    error: lidarrError,
+    mutate: revalidateLidarr,
+  } = useSWR<LidarrSettings[]>('/api/v1/settings/lidarr');
+  const {
+    data: lazyLibrarianData,
+    error: lazyLibrarianError,
+    mutate: revalidateLazyLibrarian,
+  } = useSWR<LazyLibrarianSettings[]>('/api/v1/settings/lazylibrarian');
   const { data: rules, mutate: revalidate } =
     useSWR<OverrideRuleResultsResponse>('/api/v1/overrideRule');
   const [editRadarrModal, setEditRadarrModal] = useState<{
@@ -233,7 +262,7 @@ const SettingsServices = () => {
   });
   const [deleteServerModal, setDeleteServerModal] = useState<{
     open: boolean;
-    type: 'radarr' | 'sonarr';
+    type: 'radarr' | 'sonarr' | 'readarr' | 'lidarr' | 'lazylibrarian';
     serverId: number | null;
   }>({
     open: false,
@@ -255,6 +284,9 @@ const SettingsServices = () => {
     setDeleteServerModal({ open: false, serverId: null, type: 'radarr' });
     revalidateRadarr();
     revalidateSonarr();
+    revalidateReadarr();
+    revalidateLidarr();
+    revalidateLazyLibrarian();
     mutate('/api/v1/settings/public');
   };
 
@@ -327,7 +359,15 @@ const SettingsServices = () => {
           }
           title={intl.formatMessage(messages.deleteServer, {
             serverType:
-              deleteServerModal.type === 'radarr' ? 'Radarr' : 'Sonarr',
+              deleteServerModal.type === 'radarr'
+                ? 'Radarr'
+                : deleteServerModal.type === 'sonarr'
+                  ? 'Sonarr'
+                  : deleteServerModal.type === 'readarr'
+                    ? 'Readarr'
+                    : deleteServerModal.type === 'lidarr'
+                      ? 'Lidarr'
+                      : 'LazyLibrarian',
           })}
         >
           {intl.formatMessage(messages.deleteserverconfirm)}
@@ -492,6 +532,176 @@ const SettingsServices = () => {
                   >
                     <PlusIcon />
                     <span>{intl.formatMessage(messages.addsonarr)}</span>
+                  </Button>
+                </div>
+              </li>
+            </ul>
+          </>
+        )}
+      </div>
+      <div className="mb-6 mt-10">
+        <h3 className="heading">
+          {intl.formatMessage(messages.readarrsettings)}
+        </h3>
+        <p className="description">
+          {intl.formatMessage(messages.serviceSettingsDescription, {
+            serverType: 'Readarr',
+          })}
+        </p>
+      </div>
+      <div className="section">
+        {!readarrData && !readarrError && <LoadingSpinner />}
+        {readarrData && !readarrError && (
+          <>
+            {readarrData.length > 0 &&
+              !readarrData.some((r) => r.isDefault) && (
+                <Alert
+                  title={intl.formatMessage(messages.noDefaultServer, {
+                    serverType: 'Readarr',
+                    mediaType: intl.formatMessage(messages.mediaTypeBook),
+                  })}
+                />
+              )}
+            <ul className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              {readarrData.map((readarr) => (
+                <ServerInstance
+                  key={`readarr-config-${readarr.id}`}
+                  name={readarr.name}
+                  hostname={readarr.hostname}
+                  port={readarr.port}
+                  profileName={readarr.activeProfileName}
+                  isSSL={readarr.useSsl}
+                  isDefault={readarr.isDefault}
+                  is4k={readarr.is4k}
+                  externalUrl={readarr.externalUrl}
+                  onEdit={() => {}}
+                  onDelete={() =>
+                    setDeleteServerModal({
+                      open: true,
+                      serverId: readarr.id,
+                      type: 'readarr',
+                    })
+                  }
+                />
+              ))}
+              <li className="col-span-1 h-32 rounded-lg border-2 border-dashed border-gray-400 shadow sm:h-44">
+                <div className="flex h-full w-full items-center justify-center">
+                  <Button buttonType="ghost" disabled>
+                    <PlusIcon />
+                    <span>{intl.formatMessage(messages.addreadarr)}</span>
+                  </Button>
+                </div>
+              </li>
+            </ul>
+          </>
+        )}
+      </div>
+      <div className="mb-6 mt-10">
+        <h3 className="heading">
+          {intl.formatMessage(messages.lidarrsettings)}
+        </h3>
+        <p className="description">
+          {intl.formatMessage(messages.serviceSettingsDescription, {
+            serverType: 'Lidarr',
+          })}
+        </p>
+      </div>
+      <div className="section">
+        {!lidarrData && !lidarrError && <LoadingSpinner />}
+        {lidarrData && !lidarrError && (
+          <>
+            {lidarrData.length > 0 &&
+              !lidarrData.some((l) => l.isDefault) && (
+                <Alert
+                  title={intl.formatMessage(messages.noDefaultServer, {
+                    serverType: 'Lidarr',
+                    mediaType: intl.formatMessage(messages.mediaTypeMusic),
+                  })}
+                />
+              )}
+            <ul className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              {lidarrData.map((lidarr) => (
+                <ServerInstance
+                  key={`lidarr-config-${lidarr.id}`}
+                  name={lidarr.name}
+                  hostname={lidarr.hostname}
+                  port={lidarr.port}
+                  profileName={lidarr.activeProfileName}
+                  isSSL={lidarr.useSsl}
+                  isDefault={lidarr.isDefault}
+                  is4k={lidarr.is4k}
+                  externalUrl={lidarr.externalUrl}
+                  onEdit={() => {}}
+                  onDelete={() =>
+                    setDeleteServerModal({
+                      open: true,
+                      serverId: lidarr.id,
+                      type: 'lidarr',
+                    })
+                  }
+                />
+              ))}
+              <li className="col-span-1 h-32 rounded-lg border-2 border-dashed border-gray-400 shadow sm:h-44">
+                <div className="flex h-full w-full items-center justify-center">
+                  <Button buttonType="ghost" disabled>
+                    <PlusIcon />
+                    <span>{intl.formatMessage(messages.addlidarr)}</span>
+                  </Button>
+                </div>
+              </li>
+            </ul>
+          </>
+        )}
+      </div>
+      <div className="mb-6 mt-10">
+        <h3 className="heading">
+          {intl.formatMessage(messages.lazylibrariansettings)}
+        </h3>
+        <p className="description">
+          {intl.formatMessage(messages.serviceSettingsDescription, {
+            serverType: 'LazyLibrarian',
+          })}
+        </p>
+      </div>
+      <div className="section">
+        {!lazyLibrarianData && !lazyLibrarianError && <LoadingSpinner />}
+        {lazyLibrarianData && !lazyLibrarianError && (
+          <>
+            {lazyLibrarianData.length > 0 &&
+              !lazyLibrarianData.some((ll) => ll.isDefault) && (
+                <Alert
+                  title={intl.formatMessage(messages.noDefaultServer, {
+                    serverType: 'LazyLibrarian',
+                    mediaType: intl.formatMessage(messages.mediaTypeBook),
+                  })}
+                />
+              )}
+            <ul className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+              {lazyLibrarianData.map((ll) => (
+                <ServerInstance
+                  key={`ll-config-${ll.id}`}
+                  name={ll.name}
+                  hostname={ll.hostname}
+                  port={ll.port}
+                  profileName=""
+                  isSSL={ll.useSsl}
+                  isDefault={ll.isDefault}
+                  externalUrl={ll.externalUrl}
+                  onEdit={() => {}}
+                  onDelete={() =>
+                    setDeleteServerModal({
+                      open: true,
+                      serverId: ll.id,
+                      type: 'lazylibrarian',
+                    })
+                  }
+                />
+              ))}
+              <li className="col-span-1 h-32 rounded-lg border-2 border-dashed border-gray-400 shadow sm:h-44">
+                <div className="flex h-full w-full items-center justify-center">
+                  <Button buttonType="ghost" disabled>
+                    <PlusIcon />
+                    <span>{intl.formatMessage(messages.addlazylibrarian)}</span>
                   </Button>
                 </div>
               </li>

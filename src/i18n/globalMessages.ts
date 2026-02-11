@@ -68,6 +68,12 @@ const globalMessages = defineMessages('i18n', {
   addToBlacklist: 'Add to Blacklist',
   removefromBlacklist: 'Remove from Blacklist',
   specials: 'Specials',
+  book: 'Book',
+  books: 'Books',
+  audiobook: 'Audiobook',
+  music: 'Music',
+  album: 'Album',
+  artist: 'Artist',
 });
 
 export default globalMessages;
