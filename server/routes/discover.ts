@@ -1,3 +1,5 @@
+import GoogleBooksAPI from '@server/api/googlebooks';
+import MusicBrainzAPI from '@server/api/musicbrainz';
 import PlexTvAPI from '@server/api/plextv';
 import type { SortOptions } from '@server/api/themoviedb';
 import TheMovieDb from '@server/api/themoviedb';
@@ -13,7 +15,9 @@ import type {
 } from '@server/interfaces/api/discoverInterfaces';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
+import { mapBookSearchResults } from '@server/models/Book';
 import { mapProductionCompany } from '@server/models/Movie';
+import { mapReleaseGroupResult } from '@server/models/Music';
 import {
   mapCollectionResult,
   mapMovieResult,
@@ -916,5 +920,66 @@ discoverRoutes.get<Record<string, unknown>, WatchlistResponse>(
     });
   }
 );
+
+discoverRoutes.get('/books', async (req, res, next) => {
+  const googleBooks = new GoogleBooksAPI();
+
+  try {
+    const query = (req.query.query as string) || 'subject:fiction';
+    const page = Number(req.query.page) || 1;
+    const maxResults = 20;
+
+    const data = await googleBooks.searchBooks({ query, page, maxResults });
+    const volumes = data.items ?? [];
+
+    return res.status(200).json({
+      page,
+      totalPages: Math.ceil((data.totalItems || 0) / maxResults),
+      totalResults: data.totalItems || 0,
+      results: mapBookSearchResults(volumes),
+    });
+  } catch (e) {
+    logger.debug('Something went wrong retrieving discover books', {
+      label: 'API',
+      errorMessage: e.message,
+    });
+    return next({
+      status: 500,
+      message: 'Unable to retrieve discover books.',
+    });
+  }
+});
+
+discoverRoutes.get('/music', async (req, res, next) => {
+  const mb = new MusicBrainzAPI();
+
+  try {
+    const query = (req.query.query as string) || 'type:album AND status:official';
+    const page = Number(req.query.page) || 1;
+    const limit = 20;
+    const offset = (page - 1) * limit;
+
+    const data = await mb.searchReleaseGroup({ query, limit, offset });
+    const releaseGroups = (data['release-groups'] ?? []).map(
+      mapReleaseGroupResult
+    );
+
+    return res.status(200).json({
+      page,
+      totalPages: Math.ceil((data.count || 0) / limit),
+      totalResults: data.count || 0,
+      results: releaseGroups,
+    });
+  } catch (e) {
+    logger.debug('Something went wrong retrieving discover music', {
+      label: 'API',
+      errorMessage: e.message,
+    });
+    return next({
+      status: 500,
+      message: 'Unable to retrieve discover music.',
+    });
+  }
+});
 
 export default discoverRoutes;

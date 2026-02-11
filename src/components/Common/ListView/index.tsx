@@ -7,7 +7,7 @@ import globalMessages from '@app/i18n/globalMessages';
 import { MediaStatus } from '@server/constants/media';
 import type { WatchlistItem } from '@server/interfaces/api/discoverInterfaces';
 import type { BookResult } from '@server/models/Book';
-import type { MusicReleaseResult } from '@server/models/Music';
+import type { MusicReleaseGroupResult, MusicReleaseResult } from '@server/models/Music';
 import type {
   CollectionResult,
   MovieResult,
@@ -17,7 +17,7 @@ import type {
 import { useIntl } from 'react-intl';
 
 type ListViewProps = {
-  items?: (TvResult | MovieResult | PersonResult | CollectionResult | BookResult | MusicReleaseResult)[];
+  items?: (TvResult | MovieResult | PersonResult | CollectionResult | BookResult | MusicReleaseResult | MusicReleaseGroupResult)[];
   plexItems?: WatchlistItem[];
   isEmpty?: boolean;
   isLoading?: boolean;
@@ -159,13 +159,13 @@ const ListView = ({
                     key={title.id}
                     id={title.id}
                     image={title.coverUrl}
-                    status={title.mediaInfo?.status}
+                    status={'mediaInfo' in title ? title.mediaInfo?.status : undefined}
                     summary={title.artistName}
                     title={title.title}
-                    year={title.releaseDate}
+                    year={'releaseDate' in title ? title.releaseDate : (title as MusicReleaseGroupResult).firstReleaseDate}
                     mediaType={title.mediaType}
                     inProgress={
-                      (title.mediaInfo?.downloadStatus ?? []).length > 0
+                      'mediaInfo' in title ? (title.mediaInfo?.downloadStatus ?? []).length > 0 : false
                     }
                     canExpand
                   />

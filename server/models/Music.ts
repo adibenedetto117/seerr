@@ -38,12 +38,14 @@ export interface MusicArtistResult {
 
 export interface MusicReleaseGroupResult {
   id: string;
+  mediaType: 'music';
   title: string;
   primaryType?: string;
   secondaryTypes: string[];
   firstReleaseDate?: string;
   artistName?: string;
   artistId?: string;
+  coverUrl?: string;
 }
 
 export const mapReleaseResult = (
@@ -90,12 +92,14 @@ export const mapReleaseGroupResult = (
 
   return {
     id: rg.id,
+    mediaType: 'music',
     title: rg.title,
     primaryType: rg['primary-type'],
     secondaryTypes: rg['secondary-types'] ?? [],
     firstReleaseDate: rg['first-release-date'],
     artistName: artistCredit?.name,
     artistId: artistCredit?.artist.id,
+    coverUrl: `https://coverartarchive.org/release-group/${rg.id}/front-250`,
   };
 };
 

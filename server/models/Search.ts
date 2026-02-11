@@ -10,7 +10,7 @@ import type {
 import { MediaType as MainMediaType } from '@server/constants/media';
 import type Media from '@server/entity/Media';
 import type { BookResult } from '@server/models/Book';
-import type { MusicReleaseResult } from '@server/models/Music';
+import type { MusicReleaseGroupResult, MusicReleaseResult } from '@server/models/Music';
 
 export type MediaType = 'tv' | 'movie' | 'person' | 'collection' | 'book' | 'music';
 
@@ -68,7 +68,7 @@ export interface PersonResult {
   knownFor: (MovieResult | TvResult)[];
 }
 
-export type Results = MovieResult | TvResult | PersonResult | CollectionResult | BookResult | MusicReleaseResult;
+export type Results = MovieResult | TvResult | PersonResult | CollectionResult | BookResult | MusicReleaseResult | MusicReleaseGroupResult;
 
 export const mapMovieResult = (
   movieResult: TmdbMovieResult,
